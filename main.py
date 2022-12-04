@@ -27,11 +27,12 @@ def knn_data_standardization(df):
     split_point = int(len(standardized_data) * 0.8)
     train = standardized_data[:split_point]
     test = standardized_data[split_point:]
-    x_train = train.drop('Close', axis=1)
-    y_train = train['Close']
-    x_valid = test.drop('Close', axis=1)
+    train_x = train.drop('Close', axis=1)
+    train_y = train['Close']
+    test_x = test.drop('Close', axis=1)
+    test_y = test['Close']
 
-    return x_train, y_train, x_valid, train, test
+    return train_x, train_y, test_x, test_y
 
 
 def knn_model(x_train, y_train, x_test):
@@ -59,17 +60,10 @@ def linear_model(x_train, y_train, x_test):
     return preds
 
 
-def evaluation(train, valid, preds):
-    y_valid = valid['Close']
-    rmse = np.sqrt(np.mean(np.power((np.array(y_valid) - np.array(preds)), 2)))
-    # TODO:accuracy 加几个指标
-
-    # Plot the result of prediction
-    valid['Predictions'] = 0
-    valid['Predictions'] = preds
-
-    plt.plot(valid[['Close', 'Predictions']])
-    plt.plot(train['Close'])
+def evaluation(test_y, preds):
+    rmse = np.sqrt(np.mean(np.power((np.array(test_y) - np.array(preds)), 2)))
+    plt.plot(test_y, label='Actual Data')
+    plt.plot(test_y.index, preds, label='Predicted Data')
     plt.show()
 
     return rmse
@@ -133,72 +127,54 @@ if __name__ == '__main__':
     df.dropna(how='any', inplace=True)
     # Transform the data type
     df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
-    # # 查看是否存在非工作日数据：
-    # # 筛选工作日数据
-    # df['Date_working'] = df['Date'].dt.to_period('B')
-    # if len(df['Date_working'].unique()) == len(df['Date'].unique()):
-    #     print('没有非工作日数据')
-    # # 删除新增的测试数据
-    # df.drop('Date_working', axis=1, inplace=True)  # drop函数默认删除行，列需要加axis = 1 ,inplace =true则直接覆盖原数组
-
-    # 进行数据处理并寻找联系，依据图像等
-    plt.title(label='the Details in Tesla stock', loc='center')
-    plt.xlabel('Date')
-    plt.ylabel('Price')
-    ax = plt.gca()
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    plt.yticks(range(2, 1300, 300))
-    # 加入数据
-    x = df['Date']
-    plt.plot(x, df['Open'], label='Open')
-    plt.plot(x, df['Close'], label='Close')
-    plt.plot(x, df['High'], label='High')
-    plt.plot(x, df['Low'], label='Low')
-    plt.legend(loc='best')
-    plt.show()
-    # reset index after drop
-    # df.reset_index(inplace=True)
-
+    # TODO Analysis the data
+    # plt.title(label='the Details in Tesla stock', loc='center')
+    # plt.xlabel('Date')
+    # plt.ylabel('Price')
+    # ax = plt.gca()
+    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    # ax.xaxis.set_major_locator(mdates.YearLocator())
+    # plt.yticks(range(2, 1300, 300))
+    # # 加入数据
+    # x = df['Date']
+    # plt.plot(x, df['Open'], label='Open')
+    # plt.plot(x, df['Close'], label='Close')
+    # plt.plot(x, df['High'], label='High')
+    # plt.plot(x, df['Low'], label='Low')
+    # plt.legend(loc='best')
+    # plt.show()
     # TODO:reudce the data size and 作图
-    # 若有drop N/A, e.g. weekends, holidays
-    # df.dropna(how='any', inplace=True)
-    # Reset index after drop
     df.reset_index(inplace=True)
     # setting index as date
-    df['Date'] = pd.to_datetime(df.Date, format='%Y-%m-%d')
-    # print(len(df['Date']))
-    # pd['Date'].date_range(freq='b')
-    # print(len(df['Date']))
-    # Plot the volume and close price
-    df.plot(x='Volume', y='Close', kind='scatter')
-    plt.title(label='Relationship between Volume and Close', loc='center')
-    plt.xlabel('Volume')
-    plt.ylabel('Close')
-    plt.show()
-    # Plot the Close Price history
-    plt.title(label='close price history', loc='center')
-    plt.plot(df['Date'], df['Close'], label='Close', color='red')
-    plt.xlabel('date')
-    plt.ylabel('Close')
-    plt.show()
+    # df['Date'] = pd.to_datetime(df.Date, format='%Y-%m-%d')
+    # df.plot(x='Volume', y='Close', kind='scatter')
+    # plt.title(label='Relationship between Volume and Close', loc='center')
+    # plt.xlabel('Volume')
+    # plt.ylabel('Close')
+    # plt.show()
+    # # Plot the Close Price history
+    # plt.title(label='close price history', loc='center')
+    # plt.plot(df['Date'], df['Close'], label='Close', color='red')
+    # plt.xlabel('date')
+    # plt.ylabel('Close')
+    # plt.show()
 
     df.index = df['Date']
     df.drop('index', axis=1, inplace=True)
-    date_length = len(df)
+    # date_length = len(df)
     # TODO rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
     df = df[len(df) - 1500:].copy()
 
-    x_train, y_train, x_test, train, test = knn_data_standardization(df)
+    x_train, train_y, x_test, test_y = knn_data_standardization(df)
 
     # TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
     # Use KNN model
-    preds = knn_model(x_train, y_train, x_test)
-    knn_rmse = evaluation(train, test, preds)
+    preds = knn_model(x_train, train_y, x_test)
+    knn_rmse = evaluation(test_y, preds)
     print('The RMSE of knn module: ', knn_rmse)
     # Use linear regression Model
-    preds = linear_model(x_train, y_train, x_test)
-    linear_rmse = evaluation(train, test, preds)
+    preds = linear_model(x_train, train_y, x_test)
+    linear_rmse = evaluation(test_y, preds)
     print('The RMSE of linear regression model: ', linear_rmse)
     # TODO: LSTM MODIFY
     # USE LSTM model
