@@ -12,8 +12,7 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import MinMaxScaler
 
 
-# Standard the data
-def knn_data_standardization(df):
+def data_preparation(df):
     standardized_data = pd.DataFrame(index=range(0, len(df)), columns=['Date', 'Close'])
     for i in range(0, len(df)):
         standardized_data['Date'][i] = df['Date'][i]
@@ -97,7 +96,7 @@ class LSTM(nn.Module):
         return out
 
 
-def lstm_data_standardization(df):
+def lstm_data_preparation(df):
     sel_col = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
     df_LSTM = df[sel_col]
     # Normalisation
@@ -111,9 +110,57 @@ def lstm_data_standardization(df):
     df_LSTM['target'] = df_LSTM['Close'].shift(-1)
     # Drop data because of shift function
     df_LSTM.dropna()
-    df_LSTM = df_LSTM.astype(np.float32)
+    # Create the feature set and target set
+    data_features, data_targets = [], []
+    seq = 20
+    for index in range(len(df_LSTM) - seq):
+        data_features.append(
+            df_LSTM[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']][index: index + seq].values)
+        data_targets.append(df_LSTM['target'][index:index + seq])
+    data_features = np.array(data_features)
+    data_targets = np.array(data_targets)
+    # Split the data into train and test according to the ratio
+    ratio = 0.2
+    test_set_size = int(np.round(ratio * df_LSTM.shape[0]))
+    train_size = data_features.shape[0] - test_set_size
+    train_x = torch.from_numpy(data_features[:train_size].reshape(-1, seq, 6)).type(torch.Tensor)
+    test_x = torch.from_numpy(data_features[train_size:].reshape(-1, seq, 6)).type(torch.Tensor)
+    train_y = torch.from_numpy(data_targets[:train_size].reshape(-1, seq, 1)).type(torch.Tensor)
+    test_y = torch.from_numpy(data_targets[train_size:].reshape(-1, seq, 1)).type(torch.Tensor)
 
-    return df_LSTM
+    return train_x, train_y, test_x, test_y
+
+
+# TODO Pre-analysis the data
+def data_pre_analysis(df):
+    plt.title(label='the Details in Tesla stock', loc='center')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    plt.yticks(range(2, 1300, 300))
+    # 加入数据
+    x = df['Date']
+    plt.plot(x, df['Open'], label='Open')
+    plt.plot(x, df['Close'], label='Close')
+    plt.plot(x, df['High'], label='High')
+    plt.plot(x, df['Low'], label='Low')
+    plt.legend(loc='best')
+    plt.show()
+
+    df['Date'] = pd.to_datetime(df.Date, format='%Y-%m-%d')
+    df.plot(x='Volume', y='Close', kind='scatter')
+    plt.title(label='Relationship between Volume and Close', loc='center')
+    plt.xlabel('Volume')
+    plt.ylabel('Close')
+    plt.show()
+    # Plot the Close Price history
+    plt.title(label='close price history', loc='center')
+    plt.plot(df['Date'], df['Close'], label='Close', color='red')
+    plt.xlabel('date')
+    plt.ylabel('Close')
+    plt.show()
 
 
 if __name__ == '__main__':
@@ -123,51 +170,18 @@ if __name__ == '__main__':
     # Describe the data
     df.info()
     df.describe()
-
+    # Process the data
     df.dropna(how='any', inplace=True)
     # Transform the data type
     df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
-    # TODO Analysis the data
-    # plt.title(label='the Details in Tesla stock', loc='center')
-    # plt.xlabel('Date')
-    # plt.ylabel('Price')
-    # ax = plt.gca()
-    # ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
-    # ax.xaxis.set_major_locator(mdates.YearLocator())
-    # plt.yticks(range(2, 1300, 300))
-    # # 加入数据
-    # x = df['Date']
-    # plt.plot(x, df['Open'], label='Open')
-    # plt.plot(x, df['Close'], label='Close')
-    # plt.plot(x, df['High'], label='High')
-    # plt.plot(x, df['Low'], label='Low')
-    # plt.legend(loc='best')
-    # plt.show()
-    # TODO:reudce the data size and 作图
     df.reset_index(inplace=True)
-    # setting index as date
-    # df['Date'] = pd.to_datetime(df.Date, format='%Y-%m-%d')
-    # df.plot(x='Volume', y='Close', kind='scatter')
-    # plt.title(label='Relationship between Volume and Close', loc='center')
-    # plt.xlabel('Volume')
-    # plt.ylabel('Close')
-    # plt.show()
-    # # Plot the Close Price history
-    # plt.title(label='close price history', loc='center')
-    # plt.plot(df['Date'], df['Close'], label='Close', color='red')
-    # plt.xlabel('date')
-    # plt.ylabel('Close')
-    # plt.show()
-
     df.index = df['Date']
     df.drop('index', axis=1, inplace=True)
-    # date_length = len(df)
+    data_pre_analysis(df)
     # TODO rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
     df = df[len(df) - 1500:].copy()
 
-    x_train, train_y, x_test, test_y = knn_data_standardization(df)
-
-    # TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
+    x_train, train_y, x_test, test_y = data_preparation(df)
     # Use KNN model
     preds = knn_model(x_train, train_y, x_test)
     knn_rmse = evaluation(test_y, preds)
@@ -176,35 +190,13 @@ if __name__ == '__main__':
     preds = linear_model(x_train, train_y, x_test)
     linear_rmse = evaluation(test_y, preds)
     print('The RMSE of linear regression model: ', linear_rmse)
-    # TODO: LSTM MODIFY
-    # USE LSTM model
-    df_main = lstm_data_standardization(df)
-    # Create the feature set and target set
-    data_features, data_targets = [], []
-    seq = 20
-    for index in range(len(df_main) - seq):
-        data_features.append(df_main[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']][index: index + seq].values)
-        data_targets.append(df_main['target'][index:index + seq])
-    data_features = np.array(data_features)
-    data_targets = np.array(data_targets)
-    # Split the data into train and test according to the ratio
-    ratio = 0.2
-    test_set_size = int(np.round(ratio * df_main.shape[0]))
-    train_size = data_features.shape[0] - test_set_size
-
-    train_x = torch.from_numpy(data_features[:train_size].reshape(-1, seq, 6)).type(torch.Tensor)
-    test_x = torch.from_numpy(data_features[train_size:].reshape(-1, seq, 6)).type(torch.Tensor)
-    train_y = torch.from_numpy(data_targets[:train_size].reshape(-1, seq, 1)).type(torch.Tensor)
-    test_y = torch.from_numpy(data_targets[train_size:].reshape(-1, seq, 1)).type(torch.Tensor)
-    # Create the LSTM model
+    # Use LSTM model
+    train_x, train_y, test_x, test_y = lstm_data_preparation(df)
     input_dim = 6
     hidden_dim = 16
     hidden_layer = 2
     output_dim = 1
     model = LSTM(_input_dim=input_dim, _hidden_dim=hidden_dim, _output_dim=output_dim, _hidden_layer=hidden_layer)
-    # print(model)
-    # for i in range(len(list(model.parameters()))):
-        # print(list(model.parameters())[i].size())
     # Create the optimizer by Adam
     optimiser = torch.optim.Adam(model.parameters(), lr=0.01)
     # Create the loss function by MSE
@@ -224,12 +216,8 @@ if __name__ == '__main__':
     hist = np.zeros(epoch_num)
     for t in range(epoch_num):
         for step, (x, y) in enumerate(train_loader):
-            # Initialise hidden state
-            # Don't do this if you want your LSTM to be stateful
-            # model.hidden = model.init_hidden()
-            # Forward pass
-            y_train_pred = model.forward(x)
-            loss = loss_fn(y_train_pred, y)
+            preds = model.forward(x)
+            loss = loss_fn(preds, y)
             if t % 10 == 0 and t != 0:
                 print("Epoch ", t, "MSE: ", loss.item())
             hist[t] = loss.item()
@@ -240,15 +228,15 @@ if __name__ == '__main__':
             # Update parameters
             optimiser.step()
 
-    y_train_pred = model.forward(train_x)
-    print("Loss: ", loss_fn(y_train_pred, train_y).item())
+    preds = model.forward(train_x)
+    print("Loss: ", loss_fn(preds, train_y).item())
 
     # TODO 做细节图
     # 无论是真实值，还是模型的输出值，它们的维度均为（batch_size, seq, 1），seq=20
     # 我们的目的是用前20天的数据预测今天的股价，所以我们只需要每个数据序列中第20天的标签即可
     # 因为前面用了使用DataFrame中shift方法，所以第20天的标签，实际上就是第21天的股价
     # Plot the prediction
-    pred_value = y_train_pred.detach().numpy()[:, -1, 0]
+    pred_value = preds.detach().numpy()[:, -1, 0]
     true_value = train_y.detach().numpy()[:, -1, 0]
     plt.plot(pred_value, label="Preds")
     plt.plot(true_value, label="Data")
