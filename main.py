@@ -1,15 +1,17 @@
-import pandas as pd
+import matplotlib.dates as mdates  # read file and store in dataframes
 import matplotlib.pyplot as plt
-import matplotlib.dates as mdates# read file and store in dataframes
-from sklearn import neighbors
-from sklearn.model_selection import GridSearchCV
-from sklearn.preprocessing import MinMaxScaler
-from fastai.tabular.all import add_datepart
-from sklearn.linear_model import LinearRegression
+import numpy as np
+import pandas as pd
 import torch
 import torch.nn as nn
-import numpy as np
 import torch.utils.data
+from fastai.tabular.all import add_datepart
+from sklearn import neighbors
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import GridSearchCV
+from sklearn.preprocessing import MinMaxScaler
+
+
 # 预测股票未来走势
 def data_processing(df):
     # 处理数据使之可被knn 和linear regression模型处理
@@ -110,7 +112,7 @@ class LSTM(nn.Module):
         # 这里x.size(0)就是batch_size
 
         # Initialize cell state
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()#.detach()
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()  # .detach()
 
         # One time step
         # We need to detach as we are doing truncated backpropagation through time (BPTT)
@@ -154,7 +156,7 @@ if __name__ == '__main__':
     df['Date'].max()
     df['Date'].min()
 
-# 检查数据是否存在质量问题
+    # 检查数据是否存在质量问题
     # 查看是否有缺失值
     print('缺失值有几个：\n', np.sum(df.isnull()))
     # 若有drop N/A, e.g. weekends, holidays
@@ -169,7 +171,7 @@ if __name__ == '__main__':
     # 删除新增的测试数据
     df.drop('Date_working', axis=1, inplace=True)  # drop函数默认删除行，列需要加axis = 1 ,inplace =true则直接覆盖原数组
 
-# 进行数据处理并寻找联系，依据图像等
+    # 进行数据处理并寻找联系，依据图像等
     plt.title(label='the Details in Tesla stock', loc='center')
     plt.xlabel('Date')
     plt.ylabel('Price')
@@ -189,7 +191,6 @@ if __name__ == '__main__':
     # reset index after drop
     df.reset_index(inplace=True)
 
-
     # TODO:reudce the data size and 作图
     # 若有drop N/A, e.g. weekends, holidays
     # df.dropna(how='any', inplace=True)
@@ -200,7 +201,6 @@ if __name__ == '__main__':
     print(len(df['Date']))
     pd['Date'].date_range(freq='b')
     print(len(df['Date']))
-
 
     # show the volumn and close price
     df.plot(x='Volume', y='Close', kind='scatter')
@@ -224,8 +224,7 @@ if __name__ == '__main__':
     # start to predict
     x_train, y_train, x_test, train, test = data_processing(df)
 
-
-    #TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
+    # TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
     # using knn
     preds = knn_model(x_train, y_train, x_test)
     knn_rmse = evaluation(train, test, preds)
@@ -306,7 +305,7 @@ if __name__ == '__main__':
     # train model
     hist = np.zeros(num_epochs)
     for t in range(num_epochs):
-        for step,(x, y) in enumerate(train_loader):
+        for step, (x, y) in enumerate(train_loader):
 
             # Initialise hidden state
             # Don't do this if you want your LSTM to be stateful
