@@ -1,7 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-
-# read file and store in dataframes
+import matplotlib.dates as mdates# read file and store in dataframes
 from sklearn import neighbors
 from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import MinMaxScaler
@@ -147,32 +146,61 @@ def lstm_dataprocessing(df):
 if __name__ == '__main__':
     name = 'Tesla-dataset.csv'
     df = pd.read_csv(name)
+
+    # 查看数据格式及数据信息
+    df.info()
+    df.describe()
+    # 查看日期范围
+    df['Date'].max()
+    df['Date'].min()
+
+# 检查数据是否存在质量问题
     # 查看是否有缺失值
-    # print(np.sum(df.isnull()))
+    print('缺失值有几个：\n', np.sum(df.isnull()))
+    # 若有drop N/A, e.g. weekends, holidays
+    df.dropna(how='any', inplace=True)
+    # 对日期格式进行处理
+    df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
+    # 查看是否存在非工作日数据：
+    # 筛选工作日数据
+    df['Date_working'] = df['Date'].dt.to_period('B')
+    if len(df['Date_working'].unique()) == len(df['Date'].unique()):
+        print('没有非工作日数据')
+    # 删除新增的测试数据
+    df.drop('Date_working', axis=1, inplace=True)  # drop函数默认删除行，列需要加axis = 1 ,inplace =true则直接覆盖原数组
+
+# 进行数据处理并寻找联系，依据图像等
+    plt.title(label='the Details in Tesla stock', loc='center')
+    plt.xlabel('Date')
+    plt.ylabel('Price')
+    # 根据以上结果调整刻度大小
+    ax = plt.gca()  # 表明设置图片的各个轴
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))  # 横坐标标签显示的日期格式
+    ax.xaxis.set_major_locator(mdates.YearLocator())  # 以月为定为符
+    plt.yticks(range(2, 1300, 300))  # 设置纵坐标，使用range()函数设置起始、结束范围及间隔步长
+    # 加入数据
+    x = df['Date']
+    plt.plot(x, df['Open'], label='Open')
+    plt.plot(x, df['Close'], label='Close')
+    plt.plot(x, df['High'], label='High')
+    plt.plot(x, df['Low'], label='Low')
+    plt.legend(loc='best')
+    plt.show()
+    # reset index after drop
+    df.reset_index(inplace=True)
+
+
+    # TODO:reudce the data size and 作图
     # 若有drop N/A, e.g. weekends, holidays
     # df.dropna(how='any', inplace=True)
     # reset index after drop
     df.reset_index(inplace=True)
     # setting index as date
     df['Date'] = pd.to_datetime(df.Date, format='%Y-%m-%d')
-    df.index = df['Date']
-    df.drop('index', axis=1, inplace=True)
-    date_length = len(df)
+    print(len(df['Date']))
+    pd['Date'].date_range(freq='b')
+    print(len(df['Date']))
 
-    # TODO: reduce the data size
-    # rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
-    df = df[len(df) - 1500:].copy()
-
-    # show the open high low close history # 没有意义，因为观察不清楚
-    plt.title(label='the Details with Tesla shared price', loc='center')
-    plt.xlabel('Date')
-    plt.ylabel('Price')
-    plt.plot(df['Date'], df['Open'], label='Open')
-    plt.plot(df['Date'], df['Close'], label='Close')
-    plt.plot(df['Date'], df['High'], label='High')
-    plt.plot(df['Date'], df['Low'], label='Low')
-    plt.legend(loc='best')
-    plt.show()
 
     # show the volumn and close price
     df.plot(x='Volume', y='Close', kind='scatter')
@@ -188,9 +216,16 @@ if __name__ == '__main__':
     plt.ylabel('Close')
     plt.show()
 
+    df.index = df['Date']
+    df.drop('index', axis=1, inplace=True)
+    date_length = len(df)
+    # rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
+    df = df[len(df) - 1500:].copy()
     # start to predict
     x_train, y_train, x_test, train, test = data_processing(df)
 
+
+    #TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
     # using knn
     preds = knn_model(x_train, y_train, x_test)
     knn_rmse = evaluation(train, test, preds)
