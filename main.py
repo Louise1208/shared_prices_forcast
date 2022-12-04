@@ -13,7 +13,7 @@ from sklearn.preprocessing import MinMaxScaler
 
 
 # Standard the data
-def data_standardization(df):
+def knn_data_standardization(df):
     standardized_data = pd.DataFrame(index=range(0, len(df)), columns=['Date', 'Close'])
     for i in range(0, len(df)):
         standardized_data['Date'][i] = df['Date'][i]
@@ -103,62 +103,52 @@ class LSTM(nn.Module):
         return out
 
 
-def lstm_dataprocessing(df):
-    # 筛选四个变量，作为数据的输入特征
+def lstm_data_standardization(df):
     sel_col = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
     df_LSTM = df[sel_col]
-
-    # 归一化
+    # Normalisation
     scaler = MinMaxScaler(feature_range=(0, 1))
-    for col in sel_col:  # 这里不能进行统一进行缩放，因为fit_transform返回值是numpy类型
+    for col in sel_col:
         max_min_scaler = scaler.fit_transform(df_LSTM[col].values.reshape(-1, 1))
         df_LSTM = df_LSTM.drop(col, axis=1)
         df_LSTM[col] = max_min_scaler
     # print(df_LSTM.head())
-
-    # 将下一日的收盘价作为本日的标签
+    # Use the next close price as today's target
     df_LSTM['target'] = df_LSTM['Close'].shift(-1)
-    # print(np.sum(df_LSTM.isnull()))
-    df_LSTM.dropna()  # 使用了shift函数有缺失值，这里去掉缺失值所在行
-    df_LSTM = df_LSTM.astype(np.float32)  # 修改数据类型
+    # Drop data because of shift function
+    df_LSTM.dropna()
+    df_LSTM = df_LSTM.astype(np.float32)
+
     return df_LSTM
 
 
 if __name__ == '__main__':
-    name = 'Tesla-dataset.csv'
-    df = pd.read_csv(name)
+    file_path = 'Tesla-dataset.csv'
+    df = pd.read_csv(file_path)
 
-    # 查看数据格式及数据信息
+    # Describe the data
     df.info()
     df.describe()
-    # 查看日期范围
-    df['Date'].max()
-    df['Date'].min()
 
-    # 检查数据是否存在质量问题
-    # 查看是否有缺失值
-    print('缺失值有几个：\n', np.sum(df.isnull()))
-    # 若有drop N/A, e.g. weekends, holidays
     df.dropna(how='any', inplace=True)
-    # 对日期格式进行处理
+    # Transform the data type
     df['Date'] = pd.to_datetime(df['Date'], format='%Y-%m-%d')
-    # 查看是否存在非工作日数据：
-    # 筛选工作日数据
-    df['Date_working'] = df['Date'].dt.to_period('B')
-    if len(df['Date_working'].unique()) == len(df['Date'].unique()):
-        print('没有非工作日数据')
-    # 删除新增的测试数据
-    df.drop('Date_working', axis=1, inplace=True)  # drop函数默认删除行，列需要加axis = 1 ,inplace =true则直接覆盖原数组
+    # # 查看是否存在非工作日数据：
+    # # 筛选工作日数据
+    # df['Date_working'] = df['Date'].dt.to_period('B')
+    # if len(df['Date_working'].unique()) == len(df['Date'].unique()):
+    #     print('没有非工作日数据')
+    # # 删除新增的测试数据
+    # df.drop('Date_working', axis=1, inplace=True)  # drop函数默认删除行，列需要加axis = 1 ,inplace =true则直接覆盖原数组
 
     # 进行数据处理并寻找联系，依据图像等
     plt.title(label='the Details in Tesla stock', loc='center')
     plt.xlabel('Date')
     plt.ylabel('Price')
-    # 根据以上结果调整刻度大小
-    ax = plt.gca()  # 表明设置图片的各个轴
-    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))  # 横坐标标签显示的日期格式
-    ax.xaxis.set_major_locator(mdates.YearLocator())  # 以月为定为符
-    plt.yticks(range(2, 1300, 300))  # 设置纵坐标，使用range()函数设置起始、结束范围及间隔步长
+    ax = plt.gca()
+    ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y'))
+    ax.xaxis.set_major_locator(mdates.YearLocator())
+    plt.yticks(range(2, 1300, 300))
     # 加入数据
     x = df['Date']
     plt.plot(x, df['Open'], label='Open')
@@ -168,27 +158,25 @@ if __name__ == '__main__':
     plt.legend(loc='best')
     plt.show()
     # reset index after drop
-    df.reset_index(inplace=True)
+    # df.reset_index(inplace=True)
 
     # TODO:reudce the data size and 作图
     # 若有drop N/A, e.g. weekends, holidays
     # df.dropna(how='any', inplace=True)
-    # reset index after drop
+    # Reset index after drop
     df.reset_index(inplace=True)
     # setting index as date
     df['Date'] = pd.to_datetime(df.Date, format='%Y-%m-%d')
-    print(len(df['Date']))
-    pd['Date'].date_range(freq='b')
-    print(len(df['Date']))
-
-    # show the volumn and close price
+    # print(len(df['Date']))
+    # pd['Date'].date_range(freq='b')
+    # print(len(df['Date']))
+    # Plot the volume and close price
     df.plot(x='Volume', y='Close', kind='scatter')
     plt.title(label='Relationship between Volume and Close', loc='center')
     plt.xlabel('Volume')
     plt.ylabel('Close')
     plt.show()
-
-    # show the Close Price history
+    # Plot the Close Price history
     plt.title(label='close price history', loc='center')
     plt.plot(df['Date'], df['Close'], label='Close', color='red')
     plt.xlabel('date')
@@ -198,126 +186,95 @@ if __name__ == '__main__':
     df.index = df['Date']
     df.drop('index', axis=1, inplace=True)
     date_length = len(df)
-    # rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
+    # TODO rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
     df = df[len(df) - 1500:].copy()
-    # start to predict
-    x_train, y_train, x_test, train, test = data_standardization(df)
+
+    x_train, y_train, x_test, train, test = knn_data_standardization(df)
 
     # TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
-    # using knn
+    # Use KNN model
     preds = knn_model(x_train, y_train, x_test)
     knn_rmse = evaluation(train, test, preds)
-    print('the RMSE of knn module is ', knn_rmse)
-
-    # using linear regression
+    print('The RMSE of knn module: ', knn_rmse)
+    # Use linear regression Model
     preds = linear_model(x_train, y_train, x_test)
     linear_rmse = evaluation(train, test, preds)
-    print('the RMSE of linear regression module is ', linear_rmse)
-
+    print('The RMSE of linear regression model: ', linear_rmse)
     # TODO: LSTM MODIFY
-    # using lstm
-    df_main = lstm_dataprocessing(df)
-    # 创建两个列表，用来存储数据的特征和标签
-    data_feat, data_target = [], []
-
-    # 设每条数据序列有20组数据
+    # USE LSTM model
+    df_main = lstm_data_standardization(df)
+    # Create the feature set and target set
+    data_features, data_targets = [], []
     seq = 20
     for index in range(len(df_main) - seq):
-        # 构建特征集
-        data_feat.append(df_main[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']][index: index + seq].values)
-        # 构建target集
-        data_target.append(df_main['target'][index:index + seq])
+        data_features.append(df_main[['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']][index: index + seq].values)
+        data_targets.append(df_main['target'][index:index + seq])
+    data_features = np.array(data_features)
+    data_targets = np.array(data_targets)
+    # Split the data into train and test according to the ratio
+    ratio = 0.2
+    test_set_size = int(np.round(ratio * df_main.shape[0]))
+    train_size = data_features.shape[0] - test_set_size
 
-    # 将特征集和标签集整理成numpy数组
-    data_feat = np.array(data_feat)
-    data_target = np.array(data_target)
+    train_x = torch.from_numpy(data_features[:train_size].reshape(-1, seq, 6)).type(torch.Tensor)
+    test_x = torch.from_numpy(data_features[train_size:].reshape(-1, seq, 6)).type(torch.Tensor)
+    train_y = torch.from_numpy(data_targets[:train_size].reshape(-1, seq, 1)).type(torch.Tensor)
+    test_y = torch.from_numpy(data_targets[train_size:].reshape(-1, seq, 1)).type(torch.Tensor)
+    # Create the LSTM model
+    input_dim = 6
+    hidden_dim = 16
+    hidden_layer = 2
+    output_dim = 1
+    model = LSTM(_input_dim=input_dim, _hidden_dim=hidden_dim, _output_dim=output_dim, _hidden_layer=hidden_layer)
+    # print(model)
+    # for i in range(len(list(model.parameters()))):
+        # print(list(model.parameters())[i].size())
+    # Create the optimizer by Adam
+    optimiser = torch.optim.Adam(model.parameters(), lr=0.01)
+    # Create the loss function by MSE
+    loss_fn = torch.nn.MSELoss(reduction='mean')
 
-    # 这里按照8:2的比例划分训练集和测试集
-    test_set_size = int(np.round(0.2 * df_main.shape[0]))  # np.round(1)是四舍五入，
-    train_size = data_feat.shape[0] - (test_set_size)
-    print(test_set_size)  # 输出测试集大小
-    print(train_size)  # 输出训练集大小
-
-    # tensor
-    trainX = torch.from_numpy(data_feat[:train_size].reshape(-1, seq, 6)).type(torch.Tensor)
-    testX = torch.from_numpy(data_feat[train_size:].reshape(-1, seq, 6)).type(torch.Tensor)
-    trainY = torch.from_numpy(data_target[:train_size].reshape(-1, seq, 1)).type(torch.Tensor)
-    testY = torch.from_numpy(data_target[train_size:].reshape(-1, seq, 1)).type(torch.Tensor)
-    print('x_train.shape = ', trainX.shape)
-    print('y_train.shape = ', trainY.shape)
-    print('x_test.shape = ', testX.shape)
-    print('y_test.shape = ', testY.shape)
-
-    input_dim = 6  # 数据的特征数
-    hidden_dim = 16  # 隐藏层的神经元个数
-    num_layers = 2  # LSTM的层数
-    output_dim = 1  # 预测值的特征数
-    # （这是预测股票价格，所以这里特征数是1，如果预测一个单词，那么这里是one-hot向量的编码长度）
-
-    # 实例化模型
-    model = LSTM(_input_dim=input_dim, _hidden_dim=hidden_dim, _output_dim=output_dim, _hidden_layer=num_layers)
-
-    # 定义优化器和损失函数
-    optimiser = torch.optim.Adam(model.parameters(), lr=0.01)  # 使用Adam优化算法
-    loss_fn = torch.nn.MSELoss(reduction='mean')  # 使用均方差作为损失函数
-
-    # 设定数据遍历次数
-    num_epochs = 100
-
-    # 打印模型结构
-    print(model)
-
-    # 打印模型各层的参数尺寸
-    for i in range(len(list(model.parameters()))):
-        print(list(model.parameters())[i].size())
-    # 分块
+    epoch_num = 100
     batch_size = 500
-    train = torch.utils.data.TensorDataset(trainX, trainY)
-    test = torch.utils.data.TensorDataset(testX, testY)
+    train = torch.utils.data.TensorDataset(train_x, train_y)
+    test = torch.utils.data.TensorDataset(test_x, test_y)
     train_loader = torch.utils.data.DataLoader(dataset=train,
                                                batch_size=batch_size,
                                                shuffle=False)
-
     test_loader = torch.utils.data.DataLoader(dataset=test,
                                               batch_size=batch_size,
                                               shuffle=False)
-    # train model
-    hist = np.zeros(num_epochs)
-    for t in range(num_epochs):
+    # Train model
+    hist = np.zeros(epoch_num)
+    for t in range(epoch_num):
         for step, (x, y) in enumerate(train_loader):
-
             # Initialise hidden state
             # Don't do this if you want your LSTM to be stateful
             # model.hidden = model.init_hidden()
             # Forward pass
             y_train_pred = model.forward(x)
-
             loss = loss_fn(y_train_pred, y)
-            if t % 10 == 0 and t != 0:  # 每训练十次，打印一次均方差
+            if t % 10 == 0 and t != 0:
                 print("Epoch ", t, "MSE: ", loss.item())
             hist[t] = loss.item()
-
-            # Zero out gradient, else they will accumulate between epochs 将梯度归零
+            # Zero out gradient, else they will accumulate between epochs
             optimiser.zero_grad()
             # Backward pass
             loss.backward()
             # Update parameters
             optimiser.step()
 
-    # 计算训练得到的模型在训练集上的均方差
-    y_train_pred = model.forward(trainX)
-    print(loss_fn(y_train_pred, trainY).item())
+    y_train_pred = model.forward(train_x)
+    print("Loss: ", loss_fn(y_train_pred, train_y).item())
 
-    # 作图
     # TODO 做细节图
     # 无论是真实值，还是模型的输出值，它们的维度均为（batch_size, seq, 1），seq=20
     # 我们的目的是用前20天的数据预测今天的股价，所以我们只需要每个数据序列中第20天的标签即可
     # 因为前面用了使用DataFrame中shift方法，所以第20天的标签，实际上就是第21天的股价
+    # Plot the prediction
     pred_value = y_train_pred.detach().numpy()[:, -1, 0]
-    true_value = trainY.detach().numpy()[:, -1, 0]
-    plt.plot(pred_value, label="Preds")  # 预测值
-    plt.plot(true_value, label="Data")  # 真实值
+    true_value = train_y.detach().numpy()[:, -1, 0]
+    plt.plot(pred_value, label="Preds")
+    plt.plot(true_value, label="Data")
     plt.legend()
     plt.show()
-
-# TODO
