@@ -12,113 +12,92 @@ from sklearn.model_selection import GridSearchCV
 from sklearn.preprocessing import MinMaxScaler
 
 
-# 预测股票未来走势
-def data_processing(df):
-    # 处理数据使之可被knn 和linear regression模型处理
-
-    # creating a separate dataset
-    data_close = pd.DataFrame(index=range(0, len(df)), columns=['Date', 'Close'])
-
+# Standard the data
+def data_standardization(df):
+    standardized_data = pd.DataFrame(index=range(0, len(df)), columns=['Date', 'Close'])
     for i in range(0, len(df)):
-        data_close['Date'][i] = df['Date'][i]
-        data_close['Close'][i] = df['Close'][i]
-
-    # create features: about X, date
-    ## notice: model do not accept variable in 'Timestamp' type
-
-    add_datepart(data_close, 'Date')
-    data_close.drop('Elapsed', axis=1, inplace=True)  # elapsed will be the time stamp
-    print(data_close.head())
-    # split into train and validation
-    split_point = int(len(data_close) * 0.8)
-    train = data_close[:split_point]
-    test = data_close[split_point:]
-
+        standardized_data['Date'][i] = df['Date'][i]
+        standardized_data['Close'][i] = df['Close'][i]
+    # Add all the features of date
+    add_datepart(standardized_data, 'Date')
+    # Drop Elapsed because model do not accept 'Timestamp' type
+    standardized_data.drop('Elapsed', axis=1, inplace=True)
+    # print(data_close.head())
+    # Split data into train, test and validation
+    split_point = int(len(standardized_data) * 0.8)
+    train = standardized_data[:split_point]
+    test = standardized_data[split_point:]
     x_train = train.drop('Close', axis=1)
     y_train = train['Close']
     x_valid = test.drop('Close', axis=1)
+
     return x_train, y_train, x_valid, train, test
 
 
 def knn_model(x_train, y_train, x_test):
-    # using knn model
     scaler = MinMaxScaler(feature_range=(0, 1))
-    # scaling data
-    x_train_scaled = scaler.fit_transform(x_train)
-    x_train = pd.DataFrame(x_train_scaled)
-    x_test_scaled = scaler.fit_transform(x_test)
-    x_test = pd.DataFrame(x_test_scaled)
-
-    # using grid search to find the best parameter
+    # Scale data
+    x_train = pd.DataFrame(scaler.fit_transform(x_train))
+    x_test = pd.DataFrame(scaler.fit_transform(x_test))
+    # Find the best parameter by grid search
     params = {'n_neighbors': [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}
     knn = neighbors.KNeighborsRegressor()
     model = GridSearchCV(knn, params, cv=5)
     model.fit(x_train, y_train)
     print("best parameters: ", model.best_params_)
+    # Predict test data
     preds = model.predict(x_test)
+
     return preds
 
 
-# #implement linear regression
 def linear_model(x_train, y_train, x_test):
     model = LinearRegression()
     model.fit(x_train, y_train)
     preds = model.predict(x_test)
+
     return preds
 
 
 def evaluation(train, valid, preds):
-    # evaluation
-    print(valid.head())
     y_valid = valid['Close']
     rmse = np.sqrt(np.mean(np.power((np.array(y_valid) - np.array(preds)), 2)))
     # TODO:accuracy 加几个指标
 
-    # for plotting
+    # Plot the result of prediction
     valid['Predictions'] = 0
     valid['Predictions'] = preds
 
     plt.plot(valid[['Close', 'Predictions']])
     plt.plot(train['Close'])
     plt.show()
+
     return rmse
 
 
 # TODO: 用LSTM模型
 class LSTM(nn.Module):
-    def __init__(self, input_dim, hidden_dim, num_layers, output_dim):
+    def __init__(self, _input_dim, _hidden_dim, _hidden_layer, _output_dim):
         super(LSTM, self).__init__()
-
-        self.input_dim = input_dim
-        # Hidden dimensions
-        self.hidden_dim = hidden_dim
-
-        # Number of hidden layers
-        self.num_layers = num_layers
-
-        # Building your LSTM
+        self.input_dim = _input_dim
+        self.hidden_dim = _hidden_dim
+        self.num_layers = _hidden_layer
+        # Build LSTM
         # batch_first=True causes input/output tensors to be of shape (batch_dim, seq_dim, feature_dim)
-
-        self.lstm = nn.LSTM(input_dim, hidden_dim, num_layers, batch_first=True)
-        print("output_dim: ", output_dim)
-
-        # Readout layer 在LSTM后再加一个全连接层，因为是回归问题，所以不能在线性层后加激活函数
-        self.fc = nn.Linear(hidden_dim, output_dim)
+        self.lstm = nn.LSTM(_input_dim, _hidden_dim, _hidden_layer, batch_first=True)
+        # Add a full connected layer
+        self.fc = nn.Linear(_hidden_dim, _output_dim)
 
     def forward(self, x):
-        # Initialize hidden state with zeros
-
+        # Initialize hidden state
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
-        # 这里x.size(0)就是batch_size
-
         # Initialize cell state
-        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()  # .detach()
-
+        c0 = torch.zeros(self.num_layers, x.size(0), self.hidden_dim).requires_grad_()
+        # Detach them because we don't want to propagate back through the entire training history
+        h0 = h0.detach()
+        c0 = c0.detach()
         # One time step
-        # We need to detach as we are doing truncated backpropagation through time (BPTT)
-        # If we don't, we'll backprop all the way to the start even after going through another batch
-        out, (hn, cn) = self.lstm(x, (h0.detach(), c0.detach()))
-
+        out, (hn, cn) = self.lstm(x, (h0, c0))
         out = self.fc(out)
 
         return out
@@ -222,7 +201,7 @@ if __name__ == '__main__':
     # rmse 很低。可能：tesla是最近几年崛起的，因此使用全不数据意义不大。可以只使用最近几年的数据
     df = df[len(df) - 1500:].copy()
     # start to predict
-    x_train, y_train, x_test, train, test = data_processing(df)
+    x_train, y_train, x_test, train, test = data_standardization(df)
 
     # TODO： knn和线性回归，修改，增加一个成交量与收盘价格的关系的预测！！
     # using knn
@@ -276,7 +255,7 @@ if __name__ == '__main__':
     # （这是预测股票价格，所以这里特征数是1，如果预测一个单词，那么这里是one-hot向量的编码长度）
 
     # 实例化模型
-    model = LSTM(input_dim=input_dim, hidden_dim=hidden_dim, output_dim=output_dim, num_layers=num_layers)
+    model = LSTM(_input_dim=input_dim, _hidden_dim=hidden_dim, _output_dim=output_dim, _hidden_layer=num_layers)
 
     # 定义优化器和损失函数
     optimiser = torch.optim.Adam(model.parameters(), lr=0.01)  # 使用Adam优化算法
